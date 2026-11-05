@@ -42,8 +42,12 @@ and places one Boil Text subtitle clip per few words. It must be fast. An 83s cl
   210px, picker/checkbox state saving, and Generate/Remove through the new buttons on Cut Test (13 subtitles, correct text).
   Not verified: hover/press colors (needs a real mouse) and other panel sizes. Installed with UPIA on 2026-11-05;
   the release copy's saved settings (maxWords 6) were backed up and restored around the upgrade.
-- The user has **not** run it on real footage yet. Also unchecked: playback smoothness with many
-  AE templates on the timeline, and editing text in Essential Graphics.
+- The user has **not** run it on real footage yet. Also unchecked: editing text in Essential Graphics.
+- **Playback (checked 2026-11-05, Long Test, 89 subtitles, macOS laptop):** Premiere's dropped-frame indicator showed
+  2 dropped frames over 41s at 1/2 resolution, 2 over 30s at Full, and 0 over 30s at Full right after a fresh Generate.
+  So the many per-subtitle MOGRTs play in real time on this test footage (one 1080p clip; real camera footage with
+  effects will be heavier). The indicator is in the Program monitor's wrench menu, and its tooltip gives the count.
+  Premiere stops playback when the audio output device changes (AirPods switching away did it mid-test).
 - **Two copies, two IDs** (since 2026-11-04):
   - **Installed release:** `com.akshaj.subtitletool` "Subby" 1.3.1 (the paper design plus the line-width fix). Built by `tools/package.py` and
     installed with Adobe's UPIA into `~/Library/Application Support/Adobe/UXP/Plugins/External/com.akshaj.subtitletool_<version>`
