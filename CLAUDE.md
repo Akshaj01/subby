@@ -104,6 +104,7 @@ into a project bin. That's one project item per subtitle, which is the main cost
 | `dev-bridge/send.py` | Sends one bridge command and prints the result |
 | `dev-bridge/make_mogrt.py` | The original Python proof that baking works (not used by the panel) |
 | `test-project/` | `SubtitleTool Test.prproj`, test media, `frames/` (exported PNGs), `generated/` (experiment .mogrts). Not in git: it only exists on the user's Mac |
+| `docs/demo.gif`, `docs/panel.png` | README images. The GIF is Long Test 0.65–5.1 s exported at 12 fps through the bridge (`exportSequenceFrame` in a loop) and built with ffmpeg; the panel image is four background `app_zoom` captures of Subby Dev, cropped below its title bar. The user asked for a short README that calls Subby a work-in-progress subtitle design tool, not a deep write-up |
 
 Code conventions: plain browser scripts, no bundler or npm. Each file is an IIFE that hangs its
 module on `globalThis.ST`. Keep transcription and grouping independent of placement so placement

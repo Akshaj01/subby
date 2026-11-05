@@ -11,10 +11,13 @@
   const uxp = require("uxp");
   const fs = require("fs");
 
-  const ROOT = "/Users/akshaj/Documents/CodingProjects/SubtitleTool";
-  const BRIDGE = "file:" + ROOT + "/dev-bridge/";
-  const FRAMES_DIR = ROOT + "/test-project/frames/";
   const TEST_PROJECT = "SubtitleTool Test";
+
+  // Folders are found from the plugin's own folder: UXP Developer Tools loads the dev copy straight from
+  // <repo>/premiere-panel, so the repo root is its parent. Set once in start(), before any polling.
+  let ROOT = null;
+  let BRIDGE = null; // file: URL of <repo>/dev-bridge/
+  let FRAMES_DIR = null; // where exportFrame writes PNGs
 
   let lastId = null;
   let busy = false;
@@ -98,8 +101,15 @@
     try { writeJson("status.json", { alive: new Date().toISOString(), lastId, busy, host: uxp.host.name + " " + uxp.host.version }); } catch (e) { /* ignore */ }
   }
 
-  try { lastId = readJson("command.json").id; } catch (e) { lastId = null; }
-  heartbeat();
-  setInterval(heartbeat, 3000);
-  setInterval(poll, 500);
+  async function start() {
+    const folder = await uxp.storage.localFileSystem.getPluginFolder();
+    ROOT = folder.nativePath.replace(/\/+$/, "").replace(/\/[^/]+$/, "");
+    BRIDGE = "file:" + ROOT + "/dev-bridge/";
+    FRAMES_DIR = ROOT + "/test-project/frames/";
+    try { lastId = readJson("command.json").id; } catch (e) { lastId = null; }
+    heartbeat();
+    setInterval(heartbeat, 3000);
+    setInterval(poll, 500);
+  }
+  start().catch((e) => ST.app.log("Dev bridge didn't start: " + (e && e.message ? e.message : e), "bad"));
 })();

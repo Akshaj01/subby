@@ -1,93 +1,62 @@
 # Subby
 
-Source: https://github.com/Akshaj01/subby (private).
+*Work in progress.* A Premiere Pro panel for designing animated subtitles: it transcribes your sequence and lays
+down styled "line boil" subtitle clips that you can then tweak one by one.
 
-A Premiere Pro panel that transcribes the active sequence and drops a **Boil Text**
-subtitle clip (Thunderman, white, black outline, line boil) on the timeline for every
-few words. Built and tested on Premiere Pro 2026 (26.5.2).
+![Subby's subtitles boiling on a Premiere timeline](docs/demo.gif)
+
+<img src="docs/panel.png" alt="The Subby panel in Premiere" width="720">
+
+## What it does
+
+- Transcribes the speech in your sequence with Premiere's built-in speech to text.
+- Splits it into short subtitles that fit the frame, breaking at sentence ends and pauses.
+- Places each one as its own animated title clip in my After Effects "boil" style, with the position, size, angle
+  and color you set in the panel. **Remove** clears them again.
+
+I built it for my own YouTube videos. It's tested on macOS with Premiere Pro 26.5.
+
+## Installing
+
+1. Download `Subby.ccx` from [Releases](../../releases) and double-click it. Creative Cloud asks you to confirm,
+   because the plugin isn't from the Adobe marketplace.
+2. Keep Premiere › Settings › Plugins › **Enable developer mode** switched on. Adobe lists it as required for
+   plugins installed from a file.
+3. Install the **Thunderman** font, which the subtitles use.
+4. Restart Premiere, then open **Window › UXP Plugins › Subby**.
 
 ## Using it
 
-1. Open the panel: **Window › UXP Plugins › Subby**. Drag its tab to dock it anywhere.
-2. Open your sequence. Your voice should be on **A1**. You can pick another track under Voice track.
-3. Make sure the **top video track is empty** from where the talking starts. If every track is
-   in use, add one first (Sequence › Add Tracks).
-4. Press **Generate subtitles**. A progress bar shows while it works, then a ✓ line with the count.
+1. Open your sequence. Your voice should be on **A1**. You can pick another track under Voice track.
+2. Make sure the **top video track is empty** from where the talking starts. If every track is in use, add one
+   first (Sequence › Add Tracks).
+3. Press **Generate subtitles**.
 
-The **preview** at the top of the panel shows sample words with your word count, caps, position,
-size and color. Lines that would be too wide lose words, just like the real subtitles. The angle
-isn't drawn there, because Premiere's plugin panels can't rotate text.
-
-The first run on a clip runs Premiere's speech to text: about 4 seconds for 80 seconds of
-speech in testing. After that the transcript is reused. Placing roughly 100 subtitles takes about 2 seconds.
-
-**Fixing a typo:** select the subtitle clip, then edit **TEXT** in the Essential Graphics panel.
-**Starting over:** press **Remove**. It only removes clips Subby made (their
-names start with `Sub - `), and Cmd+Z undoes it.
+The preview at the top of the panel shows how the subtitles will look. To fix a typo, select the subtitle clip and
+edit **TEXT** in the Essential Graphics panel. **Remove** only removes clips Subby made, and Cmd+Z undoes it.
 
 ### Settings
 
 | Setting | Default | What it does |
 |---|---|---|
-| Voice track | A1 | Which track's speech is transcribed. Cuts and trims are respected. |
+| Voice track | A1 | Which track's speech is transcribed |
 | Language | English (US) | Premiere's transcription language |
-| Words per subtitle (max) | 4 | Buttons 1–6. Lines that would be too wide drop to fewer words, and a lone leftover word is rebalanced (4+1 becomes 3+2). |
+| Words per subtitle (max) | 4 | 1–6. Lines that would be too wide get fewer words |
 | ALL CAPS | off | |
 | Drop periods and commas | on | `?` and `!` are kept |
-| Drop filler words | on | Words Premiere tags as filler (um, uh) |
-| Position / Height | Bottom (82%) | Top, Middle and Bottom presets, or drag the Height slider. It's the vertical position of the subtitle's center. |
-| Size | 100% | Slider, 40–250%. Also scales automatically for non-1080p sequences |
-| Angle | 0° | Slider, −45° to 45° |
-| Color | #FFFFFF | Click a swatch or type a hex code. Anything other than white adds a Tint effect, which keeps the outline black |
+| Drop filler words | on | um, uh |
+| Position / Height | Bottom | Top, Middle, Bottom, or the Height slider |
+| Size | 100% | 40–250% |
+| Angle | 0° | −45° to 45° |
+| Color | white | A swatch or a hex code |
 
 Settings are remembered between sessions.
 
-Subtitles start on their first word and stay up until the next one, or briefly after
-the last word when you pause. They never cross a sentence end or a pause longer than 0.6s.
+## Development
 
-## Installing
-
-The plugin ID is still `com.akshaj.subtitletool` from before the rename, so settings and panel layout carry over.
-
-Subby is installed as a normal plugin, so you don't need the Developer Tool. Open it from
-**Window › UXP Plugins › Subby**. After installing or updating, restart Premiere once.
-
-- **Update after code changes:** run `python3 tools/package.py`, then double-click
-  `dist/Subby.ccx`. Creative Cloud asks you to confirm, because the plugin
-  isn't from the Adobe marketplace.
-- **Uninstall:** Creative Cloud app › Plugins › Manage plugins › ••• › Uninstall.
-- Keep Premiere › Settings › Plugins › **Enable developer mode** switched on. Adobe lists it as required
-  for plugins installed from a file.
-
-**Development copy:** `premiere-panel/` loaded through Adobe UXP Developer Tools appears as
-**Subby Dev**. It has a different plugin ID, so it can sit next to the installed one. Only the dev
-copy includes the bridge Claude uses for testing.
-
-## How it works (and why)
-
-Premiere 26.5's plugin API can't change a title's text. The code for that exists inside
-Premiere but isn't switched on until version 27. A `.mogrt` is a zip file whose
-`definition.json` holds the default text, so for each subtitle the panel writes a copy of the
-Boil Text template with the words and font baked in, inserts it, and trims it to the timing.
-
-- Each subtitle becomes its own item in the project's **Motion Graphics Template Media** bin,
-  with a small folder next to the project file. That's normal for templates.
-- Inserting a template pushes later clips *on that track* down the timeline, which is why it
-  needs an empty track.
-- Nested sequences on the audio track can't be transcribed. Put the source clip there instead.
-
-## Files
-
-- `CLAUDE.md`: developer handover covering purpose, architecture, data formats, tested Premiere API limits and the
-  dev workflow. Claude reads it automatically when working in this folder.
-- `premiere-panel/`: the plugin (`main.js` for the panel, `src/` for transcript, word grouping,
-  template baking, placement, and a zip writer)
-- `premiere-panel/assets/`: font widths and the template parts. Rebuild after changing the
-  template or font with `python3 tools/prepare_assets.py [font.ttf] [template.mogrt]`.
-- `tools/package.py` → `dist/`: builds the installable `.ccx` (release ID, no dev bridge).
-- `tools/test_chunk.js`: checks the word grouping against a saved transcript (`node tools/test_chunk.js`).
-- `dev-bridge/`: lets Claude drive the panel during development (`python3 dev-bridge/send.py ping`).
-  It only edits the "SubtitleTool Test" project. Switch it off with `ENABLED = false` in
-  `premiere-panel/src/devbridge.js`.
-- `test-project/`: the test project, media and exported frames. Kept out of git (`.gitignore`), so a fresh
-  clone doesn't have it.
+- `premiere-panel/` is the plugin. Load it with Adobe UXP Developer Tools and it shows up as **Subby Dev**, next to
+  the installed copy.
+- `python3 tools/package.py` builds `dist/Subby.ccx`.
+- `node tools/test_chunk.js` checks how words are grouped into subtitles.
+- [`CLAUDE.md`](CLAUDE.md) is the developer handover: how it works, what Premiere's plugin API can and can't do,
+  and the test workflow. Subby is built with Claude Code, which reads that file.
