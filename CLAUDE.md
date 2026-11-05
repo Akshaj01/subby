@@ -33,10 +33,19 @@ and places one Boil Text subtitle clip per few words. It must be fast. An 83s cl
 - Background `app_*` clicks and scrolls don't reach floating UXP panels or the macOS file picker. Use full-screen
   control for those, or measure layout through the bridge (`document.getElementById(...).getBoundingClientRect()`
   in `eval`; `window.innerHeight` is null in UXP, and `h` is taken by the helpers argument).
+- **Paper redesign (2026-11-05), shipped as 1.3.0:** the user asked for a much cuter
+  UI with a crumpled paper background and picked light paper over dark. The design: cream crumpled paper (`assets/paper.jpg`),
+  white paper cards with a thick bottom-right "sticker" edge and a washi-tape heading each, ink-brown text in Chalkboard
+  SE, Thunderman for the title/headings/buttons, pastel pink/yellow/blue accents, a Polaroid-framed preview, a wiggling
+  outlined "Subby" title, and custom divs replacing every Spectrum/native control that stayed dark (buttons, checkboxes,
+  progress bar, track/language pickers). Verified live: screenshots at the floating panel's ~280px width and squeezed to
+  210px, picker/checkbox state saving, and Generate/Remove through the new buttons on Cut Test (13 subtitles, correct text).
+  Not verified: hover/press colors (needs a real mouse) and other panel sizes. Installed with UPIA on 2026-11-05;
+  the release copy's saved settings (maxWords 6) were backed up and restored around the upgrade.
 - The user has **not** run it on real footage yet. Also unchecked: playback smoothness with many
   AE templates on the timeline, and editing text in Essential Graphics.
 - **Two copies, two IDs** (since 2026-11-04):
-  - **Installed release:** `com.akshaj.subtitletool` "Subby" 1.2.0. Built by `tools/package.py` and
+  - **Installed release:** `com.akshaj.subtitletool` "Subby" 1.3.1 (the paper design plus the line-width fix). Built by `tools/package.py` and
     installed with Adobe's UPIA into `~/Library/Application Support/Adobe/UXP/Plugins/External/com.akshaj.subtitletool_<version>`
     (registered in `~/Library/Application Support/Adobe/UXP/PluginsInfo/v1/premierepro.json`). No dev bridge.
   - **Dev copy:** `premiere-panel/` = `com.akshaj.subtitletool.dev` "Subby Dev", loaded through UXP Developer
@@ -72,10 +81,10 @@ into a project bin. That's one project item per subtitle, which is the main cost
 
 | Path | What it is |
 |---|---|
-| `premiere-panel/manifest.json` | UXP manifest v5 for the **dev** copy: id `com.akshaj.subtitletool.dev`, name "Subby Dev", version 1.2.0, host `premierepro` ≥ 25.6.0, `localFileSystem: fullAccess` |
+| `premiere-panel/manifest.json` | UXP manifest v5 for the **dev** copy: id `com.akshaj.subtitletool.dev`, name "Subby Dev", version 1.3.1, host `premierepro` ≥ 25.6.0, `localFileSystem: fullAccess` |
 | `tools/package.py` | Builds `dist/Subby.ccx`: rewrites the id/name/label to the release values, drops `src/devbridge.js` and its `<script>` tag, checks that every loaded script is included |
-| `premiere-panel/index.html` | Panel UI (1.1.0 design): header, live preview, Audio/Words/Look sections, a hidden-by-default log, and a pinned footer with progress bar, Generate (CTA), Remove and the status line. Script load order: zip, template, chunk, transcript, place, main, devbridge |
-| `premiere-panel/main.js` | Controls (segmented pills, swatches, sliders), the preview, saving settings on every change, Generate/Remove with progress and status, exports `ST.app` |
+| `premiere-panel/index.html` | Panel UI (paper design, 2026-11-05): wiggling title, Polaroid preview, Audio/Words/Look paper cards, a hidden-by-default log, and a pinned footer with progress bar, Generate, Remove and the status line. All CSS is inline here. Script load order: zip, template, chunk, transcript, place, main, devbridge |
+| `premiere-panel/main.js` | Controls (pickers, segmented pills, checkboxes, swatches, sliders), the boiling title, the preview, saving settings on every change, Generate/Remove with progress and status, exports `ST.app` |
 | `premiere-panel/src/transcript.js` | `ST.transcript.sequenceWords(sequence, opts, log)` |
 | `premiere-panel/src/chunk.js` | `ST.chunk.build(words, options, metrics)`. Also a Node module for tests |
 | `premiere-panel/src/template.js` | `ST.template.bake(...)` and helpers. `NAME_PREFIX = "Sub - "` |
@@ -84,7 +93,9 @@ into a project bin. That's one project item per subtitle, which is the main cost
 | `premiere-panel/src/devbridge.js` | Dev-only file bridge so Claude can drive Premiere (see below) |
 | `premiere-panel/assets/font-metrics.json` | Thunderman advance widths, for fitting lines on screen |
 | `premiere-panel/assets/template/` | Parts of the user's `Boil Text.mogrt`: `definition.json`, `project.aegraphic`, `thumb.png` |
+| `premiere-panel/assets/paper.jpg` | The panel's crumpled paper background (900×1600, ~170 KB) |
 | `tools/prepare_assets.py` | Regenerates both assets from the font `.ttf` and the `.mogrt` |
+| `tools/make_paper.py` | Regenerates `paper.jpg` (pure-Python crease shading, then ffmpeg for grain, cream tint and JPEG). Optional seed argument |
 | `tools/test_chunk.js` + `tools/fixtures/` | Node check of grouping against a real Premiere transcript |
 | `dev-bridge/send.py` | Sends one bridge command and prints the result |
 | `dev-bridge/make_mogrt.py` | The original Python proof that baking works (not used by the panel) |
@@ -161,7 +172,12 @@ as `~/Library/Application Support/Adobe/Common/Motion Graphics Templates/Boil Te
 
 - A group closes when: the previous word has `eos` ("sentence"), the silence before the next word is
   > `pauseBreak` 0.6s ("pause"), or the group reaches `maxWords` or adding the word would exceed
-  `maxWidth` ("limit"). `maxWidth` = 1920 × 0.88 / (size/100).
+  `maxWidth` ("limit"). `maxWidth` = `ST.chunk.lineLimit(size)` = 1920 × 0.88 / **max(1, size/100)**.
+  Never more than 1920 × 0.88: the AE comp is 1920 wide and clips text outside it *before* Premiere's Motion scale
+  shrinks the clip, so a Size below 100% can't make room for longer lines. (Until 1.3.1 it divided by size/100 alone,
+  which at Size 60% allowed 2816 px lines; the user saw "because I had to type every" cut off at both ends.) At 60%
+  a line therefore fills at most ~53% of the frame; longer lines at small sizes would need a wider comp in the
+  template. A single word wider than the limit still becomes its own subtitle (it can't be split).
 - Rebalance: a 1-word group right after a "limit" group of ≥3 words takes that group's last word
   (4+1 → 3+2) if it still fits.
 - Timing: start on the first word. End at the next subtitle's start when the gap is ≤ 0.6s (no flicker),
@@ -174,8 +190,8 @@ as `~/Library/Application Support/Adobe/Common/Motion Graphics Templates/Boil Te
 - Works: flexbox, `overflow-y: auto`, `position: absolute`, `border-radius`, the Thunderman font (installed
   fonts can be used by name), `ResizeObserver`, and the built-in Spectrum widgets `sp-button` (`variant="cta"`
   is the blue button), `sp-checkbox` (`.checked`), `sp-slider` (`.value`, with "input" and "change" events and
-  a `<sp-label slot="label">`), `sp-progressbar` (`.value`) and `sp-picker`. Native `<select>` works and is used
-  for the track and language.
+  a `<sp-label slot="label">`), `sp-progressbar` (`.value`) and `sp-picker`. Native `<select>` works.
+  Since the paper redesign only `sp-slider` and the color `<input>` are still used; the rest are divs (below).
 - Doesn't work: CSS `transform` (so the preview can't show the angle), `text-shadow` (the preview's outline is
   eight black copies of the text), `aspect-ratio` (the preview's height is set from its width in JS),
   `text-transform` (the section labels are written in capitals), the `selected` look of `sp-action-button`
@@ -183,7 +199,26 @@ as `~/Library/Application Support/Adobe/Common/Motion Graphics Templates/Boil Te
 - A text `<input>` placed directly inside a flex row stretches. Wrap it in a `<span>` to keep its width.
 - The body never scrolls by itself. Keep the `#main` (scrolls) + `#footer` (pinned) layout.
 - Test the UI live with the dev copy (UDT Watch reloads on save). `eval` can read the DOM, for example
-  `getBoundingClientRect()` and `ST.app.readForm()`. Clicking in the floating panel needs full-screen control.
+  `getBoundingClientRect()` and `ST.app.readForm()`. Real mouse clicks in the floating panel need full-screen control,
+  but `el.dispatchEvent(new Event("click"))` in `eval` runs the panel's click handlers (used to test the pickers,
+  checkboxes and the Generate/Remove buttons).
+- Images and styling (tested 2026-11-05 for the paper idea): `background-image` with `background-size: cover`
+  works on `body` and any div, and so does `<img>`, for JPEG and PNG. URL forms that load: `plugin:/assets/x.jpg`,
+  a relative `assets/x.jpg` and `data:` URIs. **`plugin://assets/...` (the form in Adobe's docs) fails.**
+  `linear-gradient`, `radial-gradient`, `rgba()` colors, dashed borders and a `<style>` element added from JS work.
+  `box-shadow` doesn't, and `opacity: 0.5` showed no visible change. Installed fonts by name all work: Chalkboard SE,
+  Ditty, Bradley Hand, Comic Sans MS, Marker Felt, Noteworthy, Chalkduster. `sp-checkbox` text takes `color`,
+  but the box stays in Premiere's dark theme. `sp-slider` looks fine on a light background once its `sp-label` is
+  recolored, but its number stays light gray.
+- Native controls ignore CSS colors and stay in Premiere's dark theme: `<select>` (background ignored) and text
+  `<input>` (always a dark frame; the paper UI styles it as black label tape). They are also drawn above all HTML,
+  so a floating menu would end up under them, and that's why the pickers open as an inline list.
+- `sp-slider` hides its light-grey number with `show-value="false"` (it also shows none without a label slot).
+- Sizes are **border-box**: `width`/`height` include the border.
+- `position: relative` with `top`/`left` moves an element without moving its neighbours (the title wiggle uses it).
+- `getBoundingClientRect()` right after adding an element returns 0. Wait ~300ms (layout is asynchronous).
+- Background `app_zoom`/`app_screenshot` of Premiere's window does show the floating panel, so the panel can be
+  checked by eye without full-screen control. Scroll it with `eval` (`#main.scrollTop = N`).
 
 ## Premiere 26.5.2 UXP API facts (tested live)
 
@@ -243,14 +278,23 @@ directly and stop baking per-subtitle templates.
    `h = { context, log }`. Exit codes: 0 ok, 1 command failed, 2 timeout.
 3. **Check the result by looking:** frames land in `test-project/frames/`. Read the PNG, or tile several with
    ffmpeg (`vstack=inputs=N`) to see many subtitles at once.
-4. **Grouping without Premiere:** `node tools/test_chunk.js` should report 0 too wide and 0 overlaps.
+4. **Grouping without Premiere:** `node tools/test_chunk.js` should report 0 too wide and 0 overlaps, and its Size
+   check (40–250%, 6 words) 0 lines cut off or off screen (it exits 1 otherwise).
 5. **Changed the template or font?** Run `python3 tools/prepare_assets.py [font.ttf] [template.mogrt]`.
 6. **Ship a change to the installed copy:** bump `version` in `premiere-panel/manifest.json`, run
    `python3 -I tools/package.py`, then install. Either double-click the `.ccx` (Creative Cloud asks to confirm) or run
    ```bash
    "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/dist/Subby.ccx"
    ```
-   Check with `--list all`. Remove with `--remove Subby` (`--list all` shows the current name). Premiere loads newly installed plugins at
+   Check with `--list all`. Remove with `--remove Subby` (`--list all` shows the current name).
+   **Upgrades:** normally `--install` marks the old version "uninstalling" and the new one "enabled" in
+   `premierepro.json`, and keeps the saved settings (1.3.0 → 1.3.1 went like that). Check `premierepro.json` after
+   installing. **Quirk (2026-11-05, 1.2.0 → 1.3.0, while an old 1.1.0 "uninstalling" entry was still there):**
+   `--install` left the old version registered too, so both showed as "Enabled". `--remove <name>` takes out one
+   entry per call, oldest first (folder included), so run it until only the new version is left, checking
+   `premierepro.json` after each call. `--remove` also **deletes the plugin's saved settings**
+   (`~/Library/Application Support/Adobe/UXP/PluginsStorage/PPRO/26/External/com.akshaj.subtitletool`), so copy
+   that folder first and put it back afterwards. Premiere loads newly installed plugins at
    startup, so restart it. `require("uxp").pluginManager` is undefined in Premiere, so you can't list plugins
    from code. Look at Window › UXP Plugins (`app_menu` list works even when the screen is locked) or at `premierepro.json`.
    UDT has two rows: the dev copy (shown as "SubtitleTool Dev" or "Subby Dev"; use this one, Load & Watch) and a stale
@@ -276,3 +320,5 @@ open panels. Full-screen control was needed once and then released.
 - Expose a **color control** in the AE template instead of using a Tint effect.
 - The transcript has **speaker** labels, which could give per-character colors (untested whether Premiere
   tells apart one person doing different voices).
+- Paper UI second pass (left out of the first one on purpose): tilted washi tape or doodle stickers as pre-rotated PNGs
+  (no CSS rotation), and custom paper-style sliders instead of `sp-slider`.

@@ -4,93 +4,165 @@
     <meta charset="utf-8" />
     <style>
       /* Layout: settings scroll in #main; Generate, Remove and progress stay visible in #footer.
-         UXP notes: no CSS transform, text-shadow or aspect-ratio, so the preview fakes the outline and
-         sets its height from its width in main.js. sp-* tags are Adobe's built-in Spectrum widgets. */
+         Look (1.3.0): crumpled paper (assets/paper.jpg, made by tools/make_paper.py) under white paper cards.
+         UXP notes: no transform, box-shadow, text-shadow or aspect-ratio. The "sticker" shadow is a thicker
+         right/bottom border, the outlines on the title and preview text are black copies of the text, and the
+         preview's height is set from its width in main.js. Buttons, checkboxes, pickers and the progress bar are plain
+         divs because Spectrum's widgets stay in Premiere's dark theme. Image URLs must be relative or plugin:/
+         (plugin:// doesn't load). */
       html, body { height: 100%; }
-      body { margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; background: #232323; color: #d8d8d8; font-size: 12px; }
-      #main { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 12px 12px; }
-      #footer { flex: 0 0 auto; padding: 10px 12px 10px; border-top: 1px solid #383838; background: #262626; }
+      body { margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden;
+             background-color: #EEE8DB; background-image: url("assets/paper.jpg"); background-size: cover;
+             color: #3B3127; font-family: "Chalkboard SE", "Comic Sans MS", sans-serif; font-size: 12px; }
+      #main { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px 14px; }
+      #footer { flex: 0 0 auto; padding: 10px 12px 8px; border-top: 2px dashed rgba(59, 49, 39, 0.35);
+                background-color: rgba(255, 252, 244, 0.72); }
 
-      .header { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; }
-      .title { font-family: Thunderman; font-size: 22px; color: #fff; }
-      .tagline { color: #8c8c8c; font-size: 11px; }
+      /* Header. The title's letters are built in main.js: white with a black outline, wiggling. */
+      .header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; margin: 0 0 8px; }
+      #title { display: flex; flex-shrink: 0; height: 40px; line-height: 40px; margin-right: 8px; font-family: Thunderman; font-size: 30px; }
+      .letter { position: relative; }
+      .letter .ghost { color: rgba(0, 0, 0, 0); }
+      .letter .copy { position: absolute; left: 0; top: 0; }
+      .tagline { color: #7A6A55; font-size: 11px; white-space: nowrap; }
 
-      .preview { position: relative; width: 100%; height: 144px; background: #2b3138; border: 1px solid #3c434b; border-radius: 6px; overflow: hidden; }
+      /* Preview, framed like a Polaroid. */
+      .polaroid { background-color: #FFFFFF; border: 2px solid #3B3127; border-right-width: 4px; border-bottom-width: 4px;
+                  border-radius: 6px; padding: 7px 7px 1px; }
+      .preview { position: relative; width: 100%; height: 144px; background-color: #2B3138; border-radius: 3px; overflow: hidden; }
       .preview .ptext { position: absolute; left: 0; top: 0; white-space: nowrap; text-align: center; font-family: Thunderman; }
-      .preview-head { display: flex; justify-content: space-between; color: #8a8a8a; font-size: 10px; letter-spacing: 0.08em; margin: 0 0 5px; }
+      .caption { display: flex; justify-content: space-between; color: #7A6A55; font-size: 11px; padding: 4px 2px 3px; }
 
-      .section { color: #8a8a8a; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; margin: 16px 0 8px; }
+      /* Paper cards with a strip of washi tape as the heading. */
+      .card { position: relative; margin: 22px 0 0; padding: 18px 10px 6px; background-color: rgba(255, 253, 248, 0.86);
+              border: 2px solid #3B3127; border-right-width: 4px; border-bottom-width: 4px; border-radius: 12px; }
+      .tape { position: absolute; left: 12px; top: -12px; padding: 2px 12px 1px; font-family: Thunderman; font-size: 13px; color: #3B3127; }
+      .tape.blue { background-color: rgba(143, 211, 255, 0.9); }
+      .tape.yellow { background-color: rgba(255, 217, 102, 0.92); }
+      .tape.pink { background-color: rgba(255, 158, 187, 0.9); }
+
       .row { display: flex; align-items: center; justify-content: space-between; margin: 0 0 8px; }
-      .row > label, .row > .label { color: #c2c2c2; }
-      select, input[type="text"] { width: 120px; background: #1b1b1b; color: #eee; border: 1px solid #454545; border-radius: 4px; padding: 3px 6px; }
       .field { margin: 0 0 10px; }
-      .field > .label { display: block; color: #c2c2c2; margin: 0 0 5px; }
-      /* Segmented pills (sp-action-button's selected state doesn't show in Premiere, so these are plain divs). */
-      .seg { display: flex; border: 1px solid #4a4a4a; border-radius: 5px; overflow: hidden; }
-      .seg .opt { flex: 1 1 0; text-align: center; padding: 5px 0; color: #cfcfcf; background: #1d1d1d; }
-      .seg .opt.sep { border-left: 1px solid #4a4a4a; }
-      .seg .opt.on { background: #3b72e0; color: #ffffff; }
-      .check { margin: 0 0 4px; }
+      .field > .label { display: block; margin: 0 0 5px; }
+
+      /* Pickers (native <select> stays dark, so these are divs). The list opens inline, pushing the rest down:
+         an overlay would be drawn under native widgets like the color box. */
+      .pick { display: flex; align-items: center; justify-content: space-between; width: 118px; margin-left: 8px; padding: 3px 8px;
+              background-color: #FFFDF7; border: 2px solid #3B3127; border-radius: 8px; }
+      .pick:hover, .pick.open { background-color: #FFF1C2; }
+      .pick .arrow { color: #7A6A55; margin-left: 6px; }
+      .pick-menu { display: none; max-height: 150px; overflow-y: auto; margin: -2px 0 10px; background-color: #FFFDF7;
+                   border: 2px solid #3B3127; border-radius: 8px; }
+      .pick-menu .item { padding: 4px 10px; }
+      .pick-menu .item:hover { background-color: #FFF1C2; }
+      .pick-menu .item.on { background-color: #FFD966; font-weight: bold; }
+
+      /* Segmented pills (plain divs: sp-action-button's selected state doesn't show in Premiere). */
+      .seg { display: flex; border: 2px solid #3B3127; border-radius: 8px; overflow: hidden; background-color: #FFFDF7; }
+      .seg .opt { flex: 1 1 0; text-align: center; padding: 4px 0; color: #3B3127; }
+      .seg .opt.sep { border-left: 2px solid #3B3127; }
+      .seg .opt:hover { background-color: #FFF1C2; }
+      .seg .opt.on { background-color: #FFD966; font-weight: bold; }
+
+      /* Checkboxes (plain divs; main.js toggles .on and data-on). Sizes include the border: UXP is border-box. */
+      .check { display: flex; align-items: center; margin: 0 0 7px; }
+      .check .box { display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-right: 8px;
+                    border: 2px solid #3B3127; border-radius: 5px; background-color: #FFFDF7; }
+      .check .dot { width: 6px; height: 6px; border-radius: 3px; }
+      .check:hover .box { background-color: #FFF1C2; }
+      .check.on .box { background-color: #FF9EBB; }
+      .check.on .dot { background-color: #3B3127; }
+
+      /* Sliders: Spectrum's sp-slider with its own label and number hidden (they stay light grey). */
+      .slider-head { display: flex; justify-content: space-between; margin: 2px 0 0; }
+      .slider-head .value { color: #7A6A55; }
       sp-slider { width: 100%; margin: 0 0 6px; }
 
-      #color { width: 90px; }
-      .swatches { display: flex; margin: 2px 0 0; }
-      .swatch { width: 20px; height: 20px; border-radius: 10px; margin-right: 8px; border: 2px solid #3a3a3a; }
-      .swatch.on { border-color: #ffffff; }
+      /* A native text box always draws a dark frame, so it's styled as black label-maker tape. */
+      #color { width: 76px; border: none; padding: 3px 6px; background-color: #1E1E1E; color: #FFFFFF;
+               font-family: Menlo, monospace; font-size: 12px; }
+      .swatches { display: flex; margin: 0 0 6px; }
+      .swatch { width: 22px; height: 22px; border-radius: 11px; border: 2px solid #3B3127; margin: 0 7px 0 0; }
+      .swatch.on { border-width: 3px; border-color: #FF4F86; }
 
-      .details-toggle { color: #8c8c8c; font-size: 11px; margin: 18px 0 6px; }
-      #log { display: none; background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; height: 140px; overflow-y: scroll; font-family: Menlo, monospace; font-size: 10px; white-space: pre-wrap; }
-      .ok { color: #7fd17f; }
-      .bad { color: #ff8a8a; }
+      .details-toggle { color: #7A6A55; font-size: 11px; margin: 14px 0 6px; }
+      #log { display: none; height: 140px; overflow-y: scroll; padding: 6px; background-color: rgba(255, 255, 255, 0.86);
+             border: 2px dashed rgba(59, 49, 39, 0.4); border-radius: 8px; color: #3B3127;
+             font-family: Menlo, monospace; font-size: 10px; white-space: pre-wrap; }
+      .ok { color: #2F8F46; }
+      .bad { color: #C8324A; }
 
-      #progress { display: none; width: 100%; margin: 0 0 8px; }
+      /* Footer: progress bar, chunky buttons that press in, status line. */
+      #progress { display: none; height: 10px; margin: 0 0 8px; border: 2px solid #3B3127; border-radius: 7px;
+                  background-color: #FFFDF7; overflow: hidden; }
+      #progressFill { width: 0; height: 100%; background-color: #8FD3FF; }
       .buttons { display: flex; align-items: center; }
-      #btnGenerate { flex: 1 1 auto; margin-right: 8px; }
-      #btnRemove { flex: 0 0 auto; }
-      #status { color: #9fb6d4; font-size: 11px; margin: 7px 0 0; min-height: 14px; }
-      #status.ok { color: #7fd17f; }
-      #status.bad { color: #ff8a8a; }
+      .btn { text-align: center; font-family: Thunderman; font-size: 14px; padding: 6px 12px 5px; color: #3B3127;
+             border: 2px solid #3B3127; border-right-width: 4px; border-bottom-width: 4px; border-radius: 12px; }
+      .btn:active { border-right-width: 2px; border-bottom-width: 2px; margin-left: 2px; margin-top: 2px; }
+      .btn.main { flex: 1 1 auto; margin-right: 8px; background-color: #FF9EBB; }
+      .btn.main:hover { background-color: #FF8CB0; }
+      .btn.quiet { flex: 0 0 auto; background-color: #FFFDF7; }
+      .btn.quiet:hover { background-color: #FFF1C2; }
+      .btn.busy, .btn.busy:hover { background-color: #E4DED2; color: #A39A8A; border-color: #A39A8A; }
+      .btn.busy:active { border-right-width: 4px; border-bottom-width: 4px; margin-left: 0; margin-top: 0; }
+      #status { color: #7A6A55; font-size: 11px; margin: 7px 0 0; min-height: 14px; }
+      #status.ok { color: #2F8F46; }
+      #status.bad { color: #C8324A; }
     </style>
   </head>
   <body>
     <div id="main">
       <div class="header">
-        <div class="title">Subby</div>
-        <div class="tagline">Boil Text subtitles</div>
+        <div id="title"></div>
+        <div class="tagline">boil text subtitles</div>
       </div>
 
-      <div class="preview-head"><span>PREVIEW</span><span id="previewNote"></span></div>
-      <div id="preview" class="preview">
-        <div id="previewLayer"></div>
+      <div class="polaroid">
+        <div id="preview" class="preview">
+          <div id="previewLayer"></div>
+        </div>
+        <div class="caption"><span>preview</span><span id="previewNote"></span></div>
       </div>
 
-      <div class="section">AUDIO</div>
-      <div class="row"><label for="audioTrack">Voice track</label><select id="audioTrack"></select></div>
-      <div class="row"><label for="language">Language</label><select id="language"></select></div>
+      <div class="card">
+        <div class="tape blue">Audio</div>
+        <div class="row"><span>Voice track</span><div id="audioTrackPick" class="pick"><span id="audioTrackValue"></span><span class="arrow">▾</span></div></div>
+        <div id="audioTrackMenu" class="pick-menu"></div>
+        <div class="row"><span>Language</span><div id="languagePick" class="pick"><span id="languageValue"></span><span class="arrow">▾</span></div></div>
+        <div id="languageMenu" class="pick-menu"></div>
+      </div>
 
-      <div class="section">WORDS</div>
-      <div class="field"><span class="label">Words per subtitle (max)</span><div id="maxWords" class="seg"></div></div>
-      <div class="check"><sp-checkbox id="allCaps">ALL CAPS</sp-checkbox></div>
-      <div class="check"><sp-checkbox id="stripPunctuation">Drop periods and commas</sp-checkbox></div>
-      <div class="check"><sp-checkbox id="removeFillers">Drop filler words (um, uh)</sp-checkbox></div>
+      <div class="card">
+        <div class="tape yellow">Words</div>
+        <div class="field"><span class="label">Words per subtitle (max)</span><div id="maxWords" class="seg"></div></div>
+        <div id="allCaps" class="check"><div class="box"><div class="dot"></div></div><span>ALL CAPS</span></div>
+        <div id="stripPunctuation" class="check"><div class="box"><div class="dot"></div></div><span>Drop periods and commas</span></div>
+        <div id="removeFillers" class="check"><div class="box"><div class="dot"></div></div><span>Drop filler words (um, uh)</span></div>
+      </div>
 
-      <div class="section">LOOK</div>
-      <div class="field"><span class="label">Position</span><div id="positions" class="seg"></div></div>
-      <sp-slider id="heightPercent" min="5" max="95" step="1"><sp-label slot="label">Height (%)</sp-label></sp-slider>
-      <sp-slider id="size" min="40" max="250" step="5"><sp-label slot="label">Size (%)</sp-label></sp-slider>
-      <sp-slider id="rotation" min="-45" max="45" step="1"><sp-label slot="label">Angle (degrees)</sp-label></sp-slider>
-      <div class="row"><span class="label">Color</span><span><input id="color" type="text" /></span></div>
-      <div id="swatches" class="swatches"></div>
+      <div class="card">
+        <div class="tape pink">Look</div>
+        <div class="field"><span class="label">Position</span><div id="positions" class="seg"></div></div>
+        <div class="slider-head"><span>Height</span><span id="heightPercentValue" class="value"></span></div>
+        <sp-slider id="heightPercent" min="5" max="95" step="1" show-value="false"></sp-slider>
+        <div class="slider-head"><span>Size</span><span id="sizeValue" class="value"></span></div>
+        <sp-slider id="size" min="40" max="250" step="5" show-value="false"></sp-slider>
+        <div class="slider-head"><span>Angle</span><span id="rotationValue" class="value"></span></div>
+        <sp-slider id="rotation" min="-45" max="45" step="1" show-value="false"></sp-slider>
+        <div class="row"><span>Color</span><span><input id="color" type="text" /></span></div>
+        <div id="swatches" class="swatches"></div>
+      </div>
 
       <div id="detailsToggle" class="details-toggle">▸ Show details</div>
       <div id="log"></div>
     </div>
 
     <div id="footer">
-      <sp-progressbar id="progress" max="100" value="0"></sp-progressbar>
+      <div id="progress"><div id="progressFill"></div></div>
       <div class="buttons">
-        <sp-button id="btnGenerate" variant="cta">Generate subtitles</sp-button>
-        <sp-button id="btnRemove" variant="secondary">Remove</sp-button>
+        <div id="btnGenerate" class="btn main">Generate subtitles</div>
+        <div id="btnRemove" class="btn quiet">Remove</div>
       </div>
       <div id="status">Ready</div>
     </div>

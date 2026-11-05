@@ -22,10 +22,18 @@
   const TEMPLATE_FONT_PX = 150; // text size in the After Effects template
   const MAX_LINE = 0.88; // share of the frame width a line may use
 
+  // Widest allowed line for a Size (see ST.chunk.lineLimit: the comp clips before Premiere scales).
+  const lineLimit = (size) => ST.chunk.lineLimit(size, TEMPLATE_WIDTH, MAX_LINE);
+
   const WORD_CHOICES = [1, 2, 3, 4, 5, 6];
   const POSITIONS = [{ label: "Top", value: 15 }, { label: "Middle", value: 50 }, { label: "Bottom", value: 82 }];
   const SWATCHES = ["#FFFFFF", "#FFE14D", "#FF9F1C", "#FF4D4D", "#FF7AD9", "#4DE1FF", "#7CFF6B"];
   const SAMPLE = "hey guys welcome back to my channel".split(" "); // the preview shows the first N words
+  const CHECKS = ["allCaps", "stripPunctuation", "removeFillers"];
+  const OUTLINE = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]; // fake text stroke
+  const TITLE = "Subby";
+  const BOIL_MS = 250; // the title re-wiggles 4 times a second, like the template's posterizeTime(4)
+  const BOIL_PX = 1.3; // how far each letter can wander
 
   const $ = (id) => document.getElementById(id);
   const logEl = $("log");
@@ -56,7 +64,7 @@
       return;
     }
     bar.style.display = "block";
-    bar.value = Math.round(Math.max(0, Math.min(1, fraction)) * 100);
+    $("progressFill").style.width = Math.round(Math.max(0, Math.min(1, fraction)) * 100) + "%";
   }
   function showDetails(open) {
     logEl.style.display = open ? "block" : "none";
@@ -82,12 +90,12 @@
   }
   function readForm() {
     return {
-      audioTrack: parseInt($("audioTrack").value, 10) || 1,
-      language: $("language").value || DEFAULT_SETTINGS.language,
+      audioTrack: parseInt(pickers.audioTrack.value, 10) || 1,
+      language: pickers.language.value || DEFAULT_SETTINGS.language,
       maxWords,
-      allCaps: !!$("allCaps").checked,
-      stripPunctuation: !!$("stripPunctuation").checked,
-      removeFillers: !!$("removeFillers").checked,
+      allCaps: isOn("allCaps"),
+      stripPunctuation: isOn("stripPunctuation"),
+      removeFillers: isOn("removeFillers"),
       heightPercent: num("heightPercent", DEFAULT_SETTINGS.heightPercent),
       size: num("size", DEFAULT_SETTINGS.size),
       rotation: num("rotation", DEFAULT_SETTINGS.rotation),
@@ -97,9 +105,11 @@
   }
   function fillForm(s) {
     maxWords = Math.max(1, Math.round(s.maxWords || DEFAULT_SETTINGS.maxWords));
-    $("allCaps").checked = !!s.allCaps;
-    $("stripPunctuation").checked = !!s.stripPunctuation;
-    $("removeFillers").checked = !!s.removeFillers;
+    for (const id of CHECKS) setOn(id, !!s[id]);
+    // Until refreshChoices has asked Premiere, the pickers only know the saved choice.
+    const known = (id, fallback) => (pickers[id].options.length ? pickers[id].options : [fallback]);
+    setOptions("audioTrack", known("audioTrack", { value: s.audioTrack, label: "A" + s.audioTrack }), s.audioTrack);
+    setOptions("language", known("language", { value: s.language, label: s.language }), s.language);
     $("heightPercent").value = s.heightPercent;
     $("size").value = s.size;
     $("rotation").value = s.rotation;
@@ -108,6 +118,14 @@
   }
 
   // ---------- custom controls ----------
+  // Checkboxes are divs (Spectrum's sp-checkbox stays dark): data-on holds the state, .on draws it.
+  function isOn(id) {
+    return $(id).getAttribute("data-on") === "1";
+  }
+  function setOn(id, on) {
+    $(id).setAttribute("data-on", on ? "1" : "0");
+    $(id).className = "check" + (on ? " on" : "");
+  }
   function buildSegments(container, options, onPick) {
     container.innerHTML = "";
     options.forEach((o, i) => {
@@ -148,7 +166,47 @@
     markSelected($("positions"), preset ? preset.value : "none");
     const color = normalizeHex($("color").value);
     for (const d of $("swatches").children) d.className = "swatch" + (d.getAttribute("data-value") === color ? " on" : "");
+    $("heightPercentValue").textContent = h + "%";
+    $("sizeValue").textContent = num("size", DEFAULT_SETTINGS.size) + "%";
+    $("rotationValue").textContent = num("rotation", DEFAULT_SETTINGS.rotation) + "°";
     renderPreview();
+  }
+
+  // ---------- title ----------
+  // "Subby" in white Thunderman with a black outline, like the subtitles. Each letter is a wrapper holding an
+  // invisible copy (for size) and nine stacked copies (eight black offsets, white on top); boil() nudges the
+  // wrappers a little a few times a second. UXP has no transform or animation, but position: relative works.
+  function buildTitle() {
+    const box = $("title");
+    box.innerHTML = "";
+    const letters = [];
+    for (const ch of TITLE) {
+      const wrap = document.createElement("span");
+      wrap.className = "letter";
+      const ghost = document.createElement("span");
+      ghost.className = "ghost";
+      ghost.textContent = ch;
+      wrap.appendChild(ghost);
+      for (const [dx, dy, color] of OUTLINE.map(([x, y]) => [x * 2, y * 2, "#000000"]).concat([[0, 0, "#FFFFFF"]])) {
+        const c = document.createElement("span");
+        c.className = "copy";
+        c.textContent = ch;
+        c.style.left = dx + "px";
+        c.style.top = dy + "px";
+        c.style.color = color;
+        wrap.appendChild(c);
+      }
+      box.appendChild(wrap);
+      letters.push(wrap);
+    }
+    return letters;
+  }
+  function boil(letters) {
+    const jiggle = () => (Math.random() * 2 - 1) * BOIL_PX;
+    for (const l of letters) {
+      l.style.left = jiggle().toFixed(1) + "px";
+      l.style.top = jiggle().toFixed(1) + "px";
+    }
   }
   function changed() {
     syncControls();
@@ -168,7 +226,7 @@
     let words = SAMPLE.slice(0, Math.max(1, Math.min(SAMPLE.length, s.maxWords)));
     if (s.allCaps) words = words.map((x) => x.toUpperCase());
     const m = loadMetricsSafe();
-    const limit = (TEMPLATE_WIDTH * MAX_LINE) / ((s.size || 100) / 100);
+    const limit = lineLimit(s.size);
     while (m && words.length > 1 && ST.chunk.measure(words.join(" "), m, TEMPLATE_FONT_PX) > limit) words.pop();
     const text = words.join(" ");
     const fontPx = Math.max(6, (w * TEMPLATE_FONT_PX) / TEMPLATE_WIDTH * (s.size / 100));
@@ -189,29 +247,62 @@
       d.style.color = color;
       layer.appendChild(d);
     };
-    for (const [dx, dy] of [[-o, -o], [0, -o], [o, -o], [-o, 0], [o, 0], [-o, o], [0, o], [o, o]]) add(dx, dy, "#000000");
+    for (const [dx, dy] of OUTLINE) add(dx * o, dy * o, "#000000");
     add(0, 0, s.color);
     $("previewNote").textContent = s.rotation ? "angle " + s.rotation + "° not shown" : "";
   }
 
-  // ---------- choices from Premiere ----------
-  function setOptions(select, options, value) {
-    select.innerHTML = "";
-    for (const o of options) {
-      const opt = document.createElement("option");
-      opt.value = String(o.value);
-      opt.textContent = o.label;
-      if (String(o.value) === String(value)) opt.selected = true;
-      select.appendChild(opt);
+  // ---------- pickers (track and language) ----------
+  // Premiere draws a native <select> dark whatever the CSS says, so these are divs: a box showing the choice
+  // (#<id>Pick, text in #<id>Value) that opens an inline list (#<id>Menu). State lives in `pickers`.
+  const pickers = { audioTrack: { options: [], value: "" }, language: { options: [], value: "" } };
+  function setOptions(id, options, value) {
+    const p = pickers[id];
+    p.options = options.map((o) => ({ value: String(o.value), label: o.label }));
+    const match = p.options.find((o) => o.value === String(value));
+    p.value = match ? match.value : (p.options[0] ? p.options[0].value : "");
+    const shown = p.options.find((o) => o.value === p.value);
+    $(id + "Value").textContent = shown ? shown.label : "";
+    if (isPickerOpen(id)) openPicker(id, true); // redraw the list with the new options
+  }
+  function isPickerOpen(id) {
+    return $(id + "Menu").style.display === "block";
+  }
+  function openPicker(id, open) {
+    const menu = $(id + "Menu");
+    $(id + "Pick").className = "pick" + (open ? " open" : "");
+    menu.innerHTML = "";
+    menu.style.display = open ? "block" : "none";
+    if (!open) return;
+    const p = pickers[id];
+    for (const o of p.options) {
+      const d = document.createElement("div");
+      d.className = "item" + (o.value === p.value ? " on" : "");
+      d.textContent = o.label;
+      d.addEventListener("click", () => {
+        openPicker(id, false);
+        setOptions(id, p.options, o.value);
+        changed();
+      });
+      menu.appendChild(d);
     }
   }
+  function setupPicker(id, beforeOpen) {
+    $(id + "Pick").addEventListener("click", () => {
+      const open = !isPickerOpen(id);
+      for (const other of Object.keys(pickers)) if (other !== id) openPicker(other, false);
+      openPicker(id, open);
+      if (open && beforeOpen) beforeOpen(); // may refresh the options; setOptions redraws the open list
+    });
+  }
 
+  // ---------- choices from Premiere ----------
   async function refreshChoices(s) {
     let languages = [{ value: "en-us", label: "English (US)" }];
     try {
       languages = ppro.Transcript.querySupportedLanguages().map((l) => ({ value: l.languageCode, label: l.displayString || l.languageCode }));
     } catch (e) { /* keep default */ }
-    setOptions($("language"), languages, s.language);
+    setOptions("language", languages, s.language);
 
     let tracks = 3;
     try {
@@ -221,7 +312,7 @@
     } catch (e) { /* default */ }
     const opts = [];
     for (let i = 1; i <= Math.max(tracks, s.audioTrack); i++) opts.push({ value: i, label: "A" + i });
-    setOptions($("audioTrack"), opts, s.audioTrack);
+    setOptions("audioTrack", opts, s.audioTrack);
   }
 
   function loadMetricsSafe() {
@@ -279,7 +370,7 @@
       allCaps: s.allCaps,
       stripPunctuation: s.stripPunctuation,
       fps,
-      maxWidth: (TEMPLATE_WIDTH * MAX_LINE) / ((s.size || 100) / 100),
+      maxWidth: lineLimit(s.size),
     }, loadMetrics());
     log(words.length + " words from " + clips + " clip(s) → " + subs.length + " subtitles (" + fps.toFixed(2) + " fps)");
 
@@ -304,11 +395,10 @@
     return { removed: n };
   }
 
+  // The buttons are divs, so "disabled" is only a look; run() ignores clicks while busy.
   function setBusy(busy) {
-    for (const id of ["btnGenerate", "btnRemove"]) {
-      if (busy) $(id).setAttribute("disabled", "");
-      else $(id).removeAttribute("disabled");
-    }
+    $("btnGenerate").className = "btn main" + (busy ? " busy" : "");
+    $("btnRemove").className = "btn quiet" + (busy ? " busy" : "");
   }
 
   async function run(label, fn) {
@@ -335,6 +425,9 @@
   buildSegments($("maxWords"), WORD_CHOICES.map((n) => ({ label: String(n), value: n })), (n) => { maxWords = n; changed(); });
   buildSegments($("positions"), POSITIONS, (v) => { $("heightPercent").value = v; changed(); });
   buildSwatches();
+  const titleLetters = buildTitle();
+  boil(titleLetters);
+  setInterval(() => boil(titleLetters), BOIL_MS);
 
   const settings = loadSettings();
   fillForm(settings);
@@ -343,11 +436,15 @@
     $(id).addEventListener("input", syncControls); // live while dragging
     $(id).addEventListener("change", changed);
   }
-  for (const id of ["allCaps", "stripPunctuation", "removeFillers"]) $(id).addEventListener("change", changed);
+  for (const id of CHECKS) {
+    $(id).addEventListener("click", () => {
+      setOn(id, !isOn(id));
+      changed();
+    });
+  }
   $("color").addEventListener("input", () => { if (normalizeHex($("color").value)) changed(); });
-  $("audioTrack").addEventListener("change", changed);
-  $("language").addEventListener("change", changed);
-  $("audioTrack").addEventListener("focus", () => refreshChoices(readForm()));
+  setupPicker("audioTrack", () => refreshChoices(readForm())); // the active sequence may have changed
+  setupPicker("language");
   $("detailsToggle").addEventListener("click", () => showDetails(logEl.style.display !== "block"));
   $("btnGenerate").addEventListener("click", () => run("Generate", () => generate()));
   $("btnRemove").addEventListener("click", () => run("Remove", () => remove()));

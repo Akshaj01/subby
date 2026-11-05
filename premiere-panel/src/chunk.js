@@ -15,6 +15,13 @@
     fps: 30,
   };
 
+  // Widest allowed line (template pixels at 150pt) for a Size in %. The After Effects comp is 1920 wide and
+  // clips anything outside it *before* Premiere scales the clip, so a smaller Size never makes room for a longer
+  // line. A bigger Size does shrink the limit, so the scaled-up line still fits the frame.
+  function lineLimit(size, templateWidth, share) {
+    return ((templateWidth || 1920) * (share || 0.88)) / Math.max(1, (size || 100) / 100);
+  }
+
   function measure(text, metrics, fontSize) {
     if (!metrics) return 0;
     const fallback = metrics.widths["n"] || metrics.unitsPerEm / 2;
@@ -108,6 +115,6 @@
     return subs.filter((s) => s.end > s.start).map((s) => ({ text: s.text, start: s.start, end: s.end, words: s.words, width: Math.round(measure(s.text, metrics, opts.fontSize)) }));
   }
 
-  ST.chunk = { build, measure, cleanWord, DEFAULTS };
+  ST.chunk = { build, measure, cleanWord, lineLimit, DEFAULTS };
   if (typeof module !== "undefined") module.exports = ST.chunk;
 })();

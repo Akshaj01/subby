@@ -11,3 +11,26 @@ for (const allCaps of [false, true]) {
   const bad = subs.filter((s) => s.width > 1920 * 0.88);
   console.log("too wide:", bad.length, " overlaps:", subs.filter((s, i) => i && subs[i - 1].end > s.start).length);
 }
+
+// Every Size, with up to 6 words: a line must fit inside the 1920-wide After Effects comp (which clips before
+// Premiere scales it) and, once scaled by Size, inside the frame. A single word can't be split, so one that is
+// too big for the frame at a huge Size is only reported.
+console.log("\nSize check (maxWords 6, both cases):");
+let failures = 0;
+for (const size of [40, 60, 80, 100, 150, 250]) {
+  let widest = 0;
+  const lone = new Set();
+  for (const allCaps of [false, true]) {
+    const subs = chunk.build(words, { allCaps, maxWords: 6, maxWidth: chunk.lineLimit(size) }, metrics);
+    for (const s of subs) {
+      const tooWide = s.width > 1920 * 0.88 || s.width * (size / 100) > 1920 * 0.88;
+      if (tooWide && s.words === 1) lone.add(s.text);
+      else if (tooWide) failures++;
+      else widest = Math.max(widest, s.width);
+    }
+  }
+  const note = lone.size ? `  (single words too big for the frame: ${[...lone].join(", ")})` : "";
+  console.log(`  size ${String(size).padStart(3)}%: widest line ${widest}px in the comp, ${Math.round(widest * size / 100)}px on screen${note}`);
+}
+console.log("lines cut off or off screen:", failures);
+process.exitCode = failures ? 1 : 0;
