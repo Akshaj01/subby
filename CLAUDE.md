@@ -54,7 +54,7 @@ and places one Boil Text subtitle clip per few words. It must be fast. An 83s cl
     (registered in `~/Library/Application Support/Adobe/UXP/PluginsInfo/v1/premierepro.json`). No dev bridge.
   - **Dev copy:** `premiere-panel/` = `com.akshaj.subtitletool.dev` "Subby Dev", loaded through UXP Developer
     Tools (UDT), with the dev bridge. The separate ID lets both load at once. Each has its own saved settings.
-- **Source:** private GitHub repo https://github.com/Akshaj01/subby (branch `main`). `.gitignore` leaves out `dist/`,
+- **Source:** public GitHub repo https://github.com/Akshaj01/subby (branch `main`). `.gitignore` leaves out `dist/`,
   `test-project/` and the bridge's runtime JSON files.
 - **Name vs. IDs:** the user renamed the tool to **Subby** on 2026-11-04. Only display names changed. The plugin IDs,
   the `localStorage` key, the local folder (`CodingProjects/SubtitleTool`) and the test project name ("SubtitleTool Test",
@@ -319,6 +319,23 @@ open panels. Full-screen control was needed once and then released.
 
 ## Ideas and open items (none started)
 
+- **The user's long-term plan (2026-11-05): a library of templates.** They'll design several subtitle styles in After
+  Effects for different kinds of videos, then add each to Subby as an artistic option. Boil Text stays the default.
+  The demo for the README and profile will be a video the user records and edits themselves, explaining Subby while
+  using the effects, replacing `docs/demo.gif`. Meanwhile the repo went public (2026-11-05) and is listed as work
+  in progress in the profile README's "Selected work" (github.com/Akshaj01/Akshaj01), so people can see it exists.
+  - **Tied to Boil Text today:** one folder (`assets/template/`), the font (Thunderman name + `font-metrics.json`),
+    comp width 1920 (`main.js`, `place.js`) and text size 150 (`main.js`, `chunk.js`), color via a Tint effect (assumes
+    white text, black outline), and the panel preview (draws Thunderman white with a black outline).
+    `template.js` already finds the text control by type, so the baking itself is generic.
+  - **Likely shape:** `assets/templates/<name>/` holding the `.mogrt` parts, that font's metrics and a small
+    `template.json` (font, text size, comp size, whether Tint coloring works, preview colors);
+    `prepare_assets.py` turning a `.mogrt` into such a folder; a template picker with the `.mogrt` thumbnail in the
+    panel; the choice saved in settings. Best built once a second real template exists to test against.
+  - **After Effects checklist given to the user:** expose exactly one Source Text in Essential Graphics; keep the
+    text centered in the comp (Subby moves the whole clip); 1920×1080 comp, or wider for longer lines at small sizes;
+    note the font and size; white fill if Subby's color option should apply; make the comp long (Subby trims each
+    clip) and keep any motion looping across time like the boil's `posterizeTime(4)`; export as `.mogrt`.
 - **Break subtitles at cuts**, for skits with back-and-forth dialogue (proposed to the user, not answered yet).
 - Read **several audio tracks** (dialogue split across A1/A2), breaking groups when the source changes.
 - **Premiere 27:** use `MogrtText` to set text on one template instead of baking a copy per subtitle.
