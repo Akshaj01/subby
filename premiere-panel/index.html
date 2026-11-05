@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* Layout: settings scroll in #main; Generate, Remove and progress stay visible in #footer.
+         UXP notes: no CSS transform, text-shadow or aspect-ratio, so the preview fakes the outline and
+         sets its height from its width in main.js. sp-* tags are Adobe's built-in Spectrum widgets. */
+      html, body { height: 100%; }
+      body { margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; background: #232323; color: #d8d8d8; font-size: 12px; }
+      #main { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 12px 12px; }
+      #footer { flex: 0 0 auto; padding: 10px 12px 10px; border-top: 1px solid #383838; background: #262626; }
+
+      .header { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; }
+      .title { font-family: Thunderman; font-size: 22px; color: #fff; }
+      .tagline { color: #8c8c8c; font-size: 11px; }
+
+      .preview { position: relative; width: 100%; height: 144px; background: #2b3138; border: 1px solid #3c434b; border-radius: 6px; overflow: hidden; }
+      .preview .ptext { position: absolute; left: 0; top: 0; white-space: nowrap; text-align: center; font-family: Thunderman; }
+      .preview-head { display: flex; justify-content: space-between; color: #8a8a8a; font-size: 10px; letter-spacing: 0.08em; margin: 0 0 5px; }
+
+      .section { color: #8a8a8a; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; margin: 16px 0 8px; }
+      .row { display: flex; align-items: center; justify-content: space-between; margin: 0 0 8px; }
+      .row > label, .row > .label { color: #c2c2c2; }
+      select, input[type="text"] { width: 120px; background: #1b1b1b; color: #eee; border: 1px solid #454545; border-radius: 4px; padding: 3px 6px; }
+      .field { margin: 0 0 10px; }
+      .field > .label { display: block; color: #c2c2c2; margin: 0 0 5px; }
+      /* Segmented pills (sp-action-button's selected state doesn't show in Premiere, so these are plain divs). */
+      .seg { display: flex; border: 1px solid #4a4a4a; border-radius: 5px; overflow: hidden; }
+      .seg .opt { flex: 1 1 0; text-align: center; padding: 5px 0; color: #cfcfcf; background: #1d1d1d; }
+      .seg .opt.sep { border-left: 1px solid #4a4a4a; }
+      .seg .opt.on { background: #3b72e0; color: #ffffff; }
+      .check { margin: 0 0 4px; }
+      sp-slider { width: 100%; margin: 0 0 6px; }
+
+      #color { width: 90px; }
+      .swatches { display: flex; margin: 2px 0 0; }
+      .swatch { width: 20px; height: 20px; border-radius: 10px; margin-right: 8px; border: 2px solid #3a3a3a; }
+      .swatch.on { border-color: #ffffff; }
+
+      .details-toggle { color: #8c8c8c; font-size: 11px; margin: 18px 0 6px; }
+      #log { display: none; background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; height: 140px; overflow-y: scroll; font-family: Menlo, monospace; font-size: 10px; white-space: pre-wrap; }
+      .ok { color: #7fd17f; }
+      .bad { color: #ff8a8a; }
+
+      #progress { display: none; width: 100%; margin: 0 0 8px; }
+      .buttons { display: flex; align-items: center; }
+      #btnGenerate { flex: 1 1 auto; margin-right: 8px; }
+      #btnRemove { flex: 0 0 auto; }
+      #status { color: #9fb6d4; font-size: 11px; margin: 7px 0 0; min-height: 14px; }
+      #status.ok { color: #7fd17f; }
+      #status.bad { color: #ff8a8a; }
+    </style>
+  </head>
+  <body>
+    <div id="main">
+      <div class="header">
+        <div class="title">Subby</div>
+        <div class="tagline">Boil Text subtitles</div>
+      </div>
+
+      <div class="preview-head"><span>PREVIEW</span><span id="previewNote"></span></div>
+      <div id="preview" class="preview">
+        <div id="previewLayer"></div>
+      </div>
+
+      <div class="section">AUDIO</div>
+      <div class="row"><label for="audioTrack">Voice track</label><select id="audioTrack"></select></div>
+      <div class="row"><label for="language">Language</label><select id="language"></select></div>
+
+      <div class="section">WORDS</div>
+      <div class="field"><span class="label">Words per subtitle (max)</span><div id="maxWords" class="seg"></div></div>
+      <div class="check"><sp-checkbox id="allCaps">ALL CAPS</sp-checkbox></div>
+      <div class="check"><sp-checkbox id="stripPunctuation">Drop periods and commas</sp-checkbox></div>
+      <div class="check"><sp-checkbox id="removeFillers">Drop filler words (um, uh)</sp-checkbox></div>
+
+      <div class="section">LOOK</div>
+      <div class="field"><span class="label">Position</span><div id="positions" class="seg"></div></div>
+      <sp-slider id="heightPercent" min="5" max="95" step="1"><sp-label slot="label">Height (%)</sp-label></sp-slider>
+      <sp-slider id="size" min="40" max="250" step="5"><sp-label slot="label">Size (%)</sp-label></sp-slider>
+      <sp-slider id="rotation" min="-45" max="45" step="1"><sp-label slot="label">Angle (degrees)</sp-label></sp-slider>
+      <div class="row"><span class="label">Color</span><span><input id="color" type="text" /></span></div>
+      <div id="swatches" class="swatches"></div>
+
+      <div id="detailsToggle" class="details-toggle">▸ Show details</div>
+      <div id="log"></div>
+    </div>
+
+    <div id="footer">
+      <sp-progressbar id="progress" max="100" value="0"></sp-progressbar>
+      <div class="buttons">
+        <sp-button id="btnGenerate" variant="cta">Generate subtitles</sp-button>
+        <sp-button id="btnRemove" variant="secondary">Remove</sp-button>
+      </div>
+      <div id="status">Ready</div>
+    </div>
+
+    <script src="src/zip.js"></script>
+    <script src="src/template.js"></script>
+    <script src="src/chunk.js"></script>
+    <script src="src/transcript.js"></script>
+    <script src="src/place.js"></script>
+    <script src="main.js"></script>
+    <script src="src/devbridge.js"></script>
+  </body>
+</html>
